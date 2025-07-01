@@ -9,7 +9,6 @@ public class Main {
             "/styles.css", "/app.js", "/links.html", "/forms.html",
             "/classic.html", "/events.html", "/events.js"
     );
-
     Server server = new Server(9999, validPaths);
     server.start();
   }

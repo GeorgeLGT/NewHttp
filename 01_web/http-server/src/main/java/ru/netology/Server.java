@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,52 +41,34 @@ class Server {
                 final var in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 final var out = new BufferedOutputStream(socket.getOutputStream());
         ) {
-
             String requestLine = in.readLine();
             if (requestLine == null || requestLine.isEmpty()) {
                 socket.close();
                 return;
             }
 
-            String[] parts = requestLine.split(" ");
-            if (parts.length != 3) {
-                socket.close();
-                return;
-            }
-
-            String method = parts[0];
-            String path = parts[1];
+            Request request = new Request(requestLine);
+            String method = request.getMethod();
+            String path = request.getPath();
 
             if (!method.equals("GET")) {
                 sendResponse(out, "HTTP/1.1 405 Method Not Allowed\r\n\r\n");
                 return;
             }
 
+
             if (!validPaths.contains(path)) {
                 sendResponse(out, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 return;
             }
 
-            Path filePath = Path.of(".", "public", path);
-            String mimeType = Files.probeContentType(filePath);
 
-            if (path.equals("/classic.html")) {
-                handleClassicHtml(out, filePath, mimeType);
-                return;
-            }
+            Map<String, List<String>> params = request.getQueryParams();
+            List<String> lastParam = request.getQueryParam("last");
 
-            long length = Files.size(filePath);
-            String headers = "HTTP/1.1 200 OK\r\n" +
-                             "Content-Type: " + mimeType + "\r\n" +
-                             "Content-Length: " + length + "\r\n" +
-                             "Connection: close\r\n\r\n";
-
-            out.write(headers.getBytes());
-            Files.copy(filePath, out);
-            out.flush();
 
         } catch (IOException e) {
-
+            e.printStackTrace();
         } finally {
             try {
                 socket.close();
@@ -94,6 +77,7 @@ class Server {
             }
         }
     }
+
     private void handleClassicHtml(BufferedOutputStream out, Path filePath, String mimeType) throws IOException {
         String template = Files.readString(filePath);
         String contentStr = template.replace("{time}", LocalDateTime.now().toString());
@@ -108,10 +92,12 @@ class Server {
         out.write(contentBytes);
         out.flush();
     }
+
     private void sendResponse(BufferedOutputStream out, String response) throws IOException {
         out.write(response.getBytes());
         out.flush();
     }
+
     public void shutdown() {
         threadPool.shutdown();
     }
